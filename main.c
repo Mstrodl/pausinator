@@ -12,16 +12,46 @@ typedef struct recordState {
   int state;
 
   xdo_t* xdo;
+
+  time_t chordStart;
+  uint8_t chordPresses;
 } RecordState;
 
 #define HIGH_THRESHOLD 255
-#define LOW_THRESHOLD 1
+#define LOW_THRESHOLD 4
 
 #define STATE_1_LEN 0.15 * SAMPLE_RATE * 0.8
 #define STATE_2_LEN 0.75 * SAMPLE_RATE * 0.1
 #define STATE_3_LEN 0.1 * SAMPLE_RATE * 0.8
 #define STATE_4_LEN 0.01 * SAMPLE_RATE * 0.8
 #define STATE_5_LEN 1 * SAMPLE_RATE * 0.8
+
+
+#define LOW_LEN STATE_1_LEN
+#define HIGH_LEN STATE_4_LEN
+
+#define CHORD_LEN 0.4
+
+void handleDown(RecordState* userData, int sample) {
+  time_t now = time(NULL) - (sample / SAMPLE_RATE);
+  if((now - userData->chordStart) > CHORD_LEN) {
+    userData->chordStart = now;
+    userData->chordPresses = 1;
+    printf("Chord: %d\n", userData->chordPresses);
+    xdo_send_keysequence_window(userData->xdo, CURRENTWINDOW, "XF86AudioPlay", 0);
+  } else {
+    ++userData->chordPresses;
+    printf("Chord: %d\n", userData->chordPresses);
+    if(userData->chordPresses == 2) {
+      xdo_send_keysequence_window(userData->xdo, CURRENTWINDOW, "XF86AudioNext", 0);
+    } else if(userData->chordPresses == 3) {
+      /* Twice because we had it skip a chord ago */
+      xdo_send_keysequence_window(userData->xdo, CURRENTWINDOW, "XF86AudioPrev XF86AudioPrev", 0);
+    } else {
+      printf("Chord: %d\n", userData->chordPresses);
+    }
+  }
+}
 
 void update(RecordState* userData) {
   /* Stupid and naïve but whatever */
@@ -40,64 +70,39 @@ void readAudio(RecordState* userData, Uint8 *stream, int len) {
 
     if(userData->state == 0) {
       if(sample <= LOW_THRESHOLD) {
-	update(userData);
-	if(userData->count >= STATE_1_LEN) {
+	++userData->count;
+	if(userData->count > LOW_LEN) {
+	  userData->state = 1;
 	  userData->count = 0;
-	  userData->state = 1; // Low spike
 	}
       } else {
 	userData->count = 0;
       }
     } else if(userData->state == 1) {
+      ++userData->count;
       if(sample >= HIGH_THRESHOLD) {
-	update(userData);
-	if(userData->count >= STATE_2_LEN) {
+	if(userData->count > (HIGH_LEN / 8)) {
+	  userData->state = 2;
 	  userData->count = 0;
-	  userData->state = 2; // High spike
 	}
-      } else {
+      } else if(sample < 100 && sample > LOW_THRESHOLD && userData->count > (SAMPLE_RATE * 0.1)) {
+	printf("Sample was %d which suggests we went back to audio!\n", sample);
+	userData->state = 0;
 	userData->count = 0;
+      } else {
+	/* userData->count = 0; */
       }
     } else if(userData->state == 2) {
-      if(sample < HIGH_THRESHOLD) {
-	update(userData);
-	if(userData->count >= STATE_3_LEN) {
+      if(sample >= LOW_THRESHOLD) {
+	++userData->count;
+	if(userData->count > LOW_LEN/4) {
+	  userData->state = 0;
 	  userData->count = 0;
-	  userData->state = 3; // Active
-	  printf("Going into active state!\n");
-	  xdo_send_keysequence_window(userData->xdo, CURRENTWINDOW, "XF86AudioPlay", 0);
+	  handleDown(userData, i);
 	}
-      } else {
-	userData->count = 0;
-      }
-    } else if(userData->state == 3) {
-      if(sample >= HIGH_THRESHOLD) {
-	update(userData);
-	if(userData->count >= STATE_4_LEN) {
-	  userData->count = 0;
-	  userData->state = 4; // High spike
-	}
-      } else if(sample <= LOW_THRESHOLD) {
-	userData->state = 5; // Low spike in case of tiny boyes
-      }
-    } else if(userData->state == 4) {
-      if(sample <= LOW_THRESHOLD) {
-	update(userData);
-	if(userData->count >= STATE_5_LEN) {
-	  userData->count = 0;
-	  userData->state = 5; // Low spike
-	}
-      } else {
-	userData->count = 0;
-      }
-    } else if(userData->state == 5) {
-      if(sample > LOW_THRESHOLD) {
-	userData->state = 0; // Normal
-	userData->count = 0;
-	/* xdo_send_keysequence_window_up(userData->xdo, CURRENTWINDOW, "XF86AudioPlay", 0); */
-	printf("Returning to normal state!\n");
       }
     }
+
     if(oldState != userData->state) {
       printf("New State! %d\n", userData->state);
     }
@@ -120,6 +125,7 @@ void main() {
   state.state = 0;
   state.count = 0;
   state.xdo = xdo_new(NULL);
+  state.chordStart = 0;
   spec.userdata = &state;
 
   int deviceCount = SDL_GetNumAudioDevices(0);

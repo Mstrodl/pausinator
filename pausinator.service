@@ -1,0 +1,11 @@
+[Unit]
+Description=Media controls daemon
+Wants=pulseaudio.service
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+ExecStart=/home/mary/projects/pausinator/main
+
+[Install]
+WantedBy=default.target
