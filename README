@@ -1,0 +1,17 @@
+pausinator
+==========
+
+Enables the use of inline media controls on headphones
+for users without the proper hardware to support them
+by analysing the waveform.
+
+Usage
+==========
+
+Ensure you have libxdo and SDL2 (version 2.0.5 or newer please) available
+
+Compile:
+gcc main.c -o main -lSDL2 -lxdo
+
+Run:
+./main
