@@ -70,36 +70,36 @@ void readAudio(RecordState* userData, Uint8 *stream, int len) {
 
     if(userData->state == 0) {
       if(sample <= LOW_THRESHOLD) {
-	++userData->count;
-	if(userData->count > LOW_LEN) {
-	  userData->state = 1;
-	  userData->count = 0;
-	}
+        ++userData->count;
+        if(userData->count > LOW_LEN) {
+          userData->state = 1;
+          userData->count = 0;
+        }
       } else {
-	userData->count = 0;
+        userData->count = 0;
       }
     } else if(userData->state == 1) {
       ++userData->count;
       if(sample >= HIGH_THRESHOLD) {
-	if(userData->count > (HIGH_LEN / 8)) {
-	  userData->state = 2;
-	  userData->count = 0;
-	}
+        if(userData->count > (HIGH_LEN / 8)) {
+          userData->state = 2;
+          userData->count = 0;
+        }
       } else if(sample < 100 && sample > LOW_THRESHOLD && userData->count > (SAMPLE_RATE * 0.1)) {
-	printf("Sample was %d which suggests we went back to audio!\n", sample);
-	userData->state = 0;
-	userData->count = 0;
+        printf("Sample was %d which suggests we went back to audio!\n", sample);
+        userData->state = 0;
+        userData->count = 0;
       } else {
-	/* userData->count = 0; */
+        /* userData->count = 0; */
       }
     } else if(userData->state == 2) {
       if(sample >= LOW_THRESHOLD) {
-	++userData->count;
-	if(userData->count > LOW_LEN/4) {
-	  userData->state = 0;
-	  userData->count = 0;
-	  handleDown(userData, i);
-	}
+        ++userData->count;
+        if(userData->count > LOW_LEN/4) {
+          userData->state = 0;
+          userData->count = 0;
+          handleDown(userData, i);
+        }
       }
     }
 
@@ -110,9 +110,11 @@ void readAudio(RecordState* userData, Uint8 *stream, int len) {
 }
 
 void main() {
+  printf("Initting SDL\n");
   if(SDL_Init(SDL_INIT_AUDIO) != 0) {
     printf("Err.. %s", SDL_GetError());
   }
+  printf("SDL Initted\n");
   
   SDL_AudioSpec spec;
   spec.freq = SAMPLE_RATE;
@@ -128,19 +130,16 @@ void main() {
   state.chordStart = 0;
   spec.userdata = &state;
 
-  int deviceCount = SDL_GetNumAudioDevices(0);
-  const char* deviceName;
-  for(int i = 0; i < deviceCount; ++i) {
-    deviceName = SDL_GetAudioDeviceName(i, 0);
-    printf("Found device %s\n", deviceName);
-  }
+  const char* deviceName = "Built-in Audio Analog Stereo";
 
+  printf("Opening device %s\n", deviceName);
   int dev = SDL_OpenAudioDevice(deviceName, 1, &spec, NULL, 0);
+  printf("Opened device: %d\n", dev);
   if(!dev) {
-    printf("Error opening %s! %s", deviceName, SDL_GetError());
+    printf("Error opening %s! %s\n", deviceName, SDL_GetError());
     return;
   }
-  printf("Listening for pulses!");
+  printf("Listening for pulses!\n");
 
   SDL_PauseAudioDevice(dev, 0);
 
